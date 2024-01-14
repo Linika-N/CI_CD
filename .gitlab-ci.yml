@@ -1,0 +1,119 @@
+# The Docker image that will be used to build your app
+image: docker:latest
+
+stages:
+  - build
+  - test
+  - deploy
+  - stop
+
+variables:
+  IMAGE_TAG: $CI_COMMIT_@BRANCH-$CI_COMMIT_SHORT_$HA
+
+include: 
+  - https://github.com/Linika-N/CI_CD/raw/main/remote.gitlab-ci.yml
+  - one.gitlab-ci.yml
+
+  
+cache:
+  key:
+    files:
+      - composer.lock
+  paths:
+    - vendor/
+
+
+build1:
+  stage: build
+  script:
+    - echo "Do your build here"
+    - echo one >> file1.txt
+    - mkdir -p vendor/
+    - echo "build" > vendor/hello.txt
+
+docker build:
+  image: docker:latest
+  stage: build
+  services:
+    - docker:dind
+  script:
+    - docker login -u $GITLAB_CI_USER -p $GITLAB_CI_PASSWORD $CI_REGISTRY
+    - echo $GITLAB_CI_USER $GITLAB_CI_PASSWORD $CI_REGISTRY_IMAGE:$IMAGE_TAG
+    - docker build -t $CI_REGISTRY_IMAGE:IMAGE_TAG .
+    - docker push $CI_REGISTRY_IMAGE:IMAGE_TAG
+
+test1:
+  stage: test
+  services:
+    - docker:dind
+  resource_group: phone
+  script:
+    - echo "Do a test here"
+    - echo "For example run a test suite"
+    # - grep one file1.txt
+    - cat vendor/hello.txt
+    - sleep 30
+    
+test2:
+  stage: test
+  script:
+    - echo "Do another parallel test here"
+    - echo "For example run a lint test"
+ 
+
+
+deploy to stage:
+  stage: deploy
+  variables:
+    TARGET_ENV: staging
+  script:
+    - echo "Do you deploy here to ${TARGET_ENV}"
+    - echo ${DB_SERVER}
+  only:
+    - main
+  environment:
+    name: staging
+    on_stop: stop to staging
+    auto_stop_in: 1 day
+
+stop to staging:
+  stage: stop
+  variables:
+    TARGET_ENV: staging
+  script:
+    - echo "STOP ${TARGET_ENV}"
+  only:
+    - main
+  when: manual
+  environment:
+    name: staging
+    action: stop
+
+deploy to prod:
+  stage: deploy
+  variables:
+    TARGET_ENV: prod
+  script:
+    - echo "Do you deploy here to ${TARGET_ENV}"
+    - echo ${DB_SERVER}
+  only:
+    - main
+  when: manual
+  environment:
+    name: prod
+    
+  
+pages:
+  stage: deploy
+  script:
+    - mkdir -p public
+    # - cp file1.txt public/index.html
+    - echo 404 >> public/404.html
+  artifacts:
+    exclude:
+      - public/404.html
+    paths:
+      - public
+  only:
+    - main
+
